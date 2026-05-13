@@ -1,5 +1,7 @@
 # TODO (Prioritized)
 
+> **Status (May 13, 2026):** P0 and P1 remediation work has been completed in the codebase and validated in recent updates. The next execution phase is **P2** (UX, product, and observability), while continuing regression checks to ensure P0/P1 guarantees remain intact.
+
 ## P0 — Critical security, privacy, and data integrity
 
 - [ ] **Replace prototype Firestore rules with membership/ownership-based authorization** (deny-by-default, per-collection checks, immutable fields, schema validation).
