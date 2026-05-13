@@ -118,9 +118,9 @@ flutter pub get
 
 ---
 
-## 7) Firestore Security Rules (Prototype Baseline)
+## 7) Firestore Security Rules (Production-safe baseline)
 
-Apply this baseline and then tighten as needed:
+Use deny-by-default membership/ownership rules. Do **not** use permissive prototype rules in production:
 
 ```txt
 rules_version = '2';
@@ -155,11 +155,11 @@ service cloud.firestore {
 }
 ```
 
-> Note: This is a prototype baseline. Production should enforce circle membership checks and stricter immutable write patterns.
+> This baseline is intentionally restrictive and safer for production hardening.
 
 ---
 
-## 8) Storage Security Rules (Prototype Baseline)
+## 8) Storage Security Rules (Production-safe baseline)
 
 ```txt
 rules_version = '2';
