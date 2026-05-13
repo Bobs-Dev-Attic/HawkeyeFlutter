@@ -26,12 +26,77 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _circleName = TextEditingController();
   final _joinCode = TextEditingController();
+  bool _isCreating = false;
+  bool _isJoining = false;
+  bool _isSendingLocation = false;
+
+  @override
+  void dispose() {
+    _circleName.dispose();
+    _joinCode.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAvatar() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (file != null) {
-      await widget.userRepository.updateAvatarImage(File(file.path));
+    try {
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file != null) {
+        await widget.userRepository.updateAvatarImage(File(file.path));
+      }
+    } catch (e) {
+      _showMessage('Avatar upload failed. ${e.toString()}');
     }
+  }
+
+  Future<void> _createGroup() async {
+    if (_isCreating) return;
+    final name = _circleName.text.trim();
+    if (name.isEmpty) return _showMessage('Group name is required.');
+    setState(() => _isCreating = true);
+    try {
+      await widget.locationRepository.createCircle(name: name, type: 'custom');
+      _showMessage('Group created.');
+    } catch (e) {
+      _showMessage('Failed to create group. ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  Future<void> _joinGroup() async {
+    if (_isJoining) return;
+    final code = _joinCode.text.trim();
+    if (code.isEmpty) return _showMessage('Join code is required.');
+    setState(() => _isJoining = true);
+    try {
+      await widget.locationRepository.joinCircleByCode(code);
+      _showMessage('Join request completed.');
+    } catch (e) {
+      _showMessage('Failed to join group. ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isJoining = false);
+    }
+  }
+
+  Future<void> _sendLocation() async {
+    if (_isSendingLocation) return;
+    final circles = await widget.locationRepository.watchMyCircles().first;
+    if (circles.isEmpty) return _showMessage('Create or join a group first.');
+    final circleId = circles.first['id'] as String;
+    setState(() => _isSendingLocation = true);
+    try {
+      await widget.locationRepository.saveEncryptedLocation(circleId: circleId, lat: 40.0, lng: -73.0);
+      _showMessage('Mock location sent.');
+    } catch (e) {
+      _showMessage('Failed to send location. ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isSendingLocation = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -58,26 +123,26 @@ class _HomeScreenState extends State<HomeScreen> {
             TextField(controller: _circleName, decoration: const InputDecoration(labelText: 'New group name (family/friends/coworkers)')),
             Row(
               children: [
-                FilledButton(
-                  onPressed: () => widget.locationRepository.createCircle(name: _circleName.text, type: 'custom'),
-                  child: const Text('Create Group'),
-                ),
+                FilledButton(onPressed: _isCreating ? null : _createGroup, child: const Text('Create Group')),
                 const SizedBox(width: 8),
-                FilledButton.tonal(
-                  onPressed: () => widget.locationRepository.saveEncryptedLocation(circleId: _circleName.text, lat: 40.0, lng: -73.0),
-                  child: const Text('Send Mock Location'),
-                ),
+                FilledButton.tonal(onPressed: _isSendingLocation ? null : _sendLocation, child: const Text('Send Mock Location')),
               ],
             ),
             const SizedBox(height: 12),
             TextField(controller: _joinCode, decoration: const InputDecoration(labelText: 'Join with share code')),
-            FilledButton.tonal(onPressed: () => widget.locationRepository.joinCircleByCode(_joinCode.text), child: const Text('Join Group')),
+            FilledButton.tonal(onPressed: _isJoining ? null : _joinGroup, child: const Text('Join Group')),
             const Divider(height: 24),
             const Text('Your groups'),
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: widget.locationRepository.watchMyCircles(),
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Center(child: Text('Failed to load groups'));
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
                   final circles = snapshot.data ?? const [];
                   if (circles.isEmpty) {
                     return const Center(child: Text('No groups yet'));

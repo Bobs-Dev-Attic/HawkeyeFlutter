@@ -16,25 +16,46 @@ class UserRepository {
   final _db = FirebaseFirestore.instance;
 
   Future<void> createProfile(String displayName, String email) async {
-    final uid = _authService.currentUser!.uid;
-    final user = AppUser(
-      uid: uid,
-      email: email,
-      displayName: displayName,
-      avatarType: 'icon',
-      avatarValue: 'person',
-      circleIds: const [],
-    );
-    await _db.collection('users').doc(uid).set(user.toMap());
+    await upsertMyProfile(displayName: displayName, email: email);
+  }
+
+  Future<void> upsertMyProfile({required String displayName, required String email}) async {
+    final uid = _authService.currentUser?.uid;
+    if (uid == null) throw StateError('No authenticated user.');
+    final userRef = _db.collection('users').doc(uid);
+    final existing = await userRef.get();
+    final safeEmail = email.trim();
+    final nameFromEmail = safeEmail.isNotEmpty ? safeEmail.split('@').first : 'User';
+    final safeDisplayName = displayName.trim().isEmpty ? nameFromEmail : displayName.trim();
+
+    if (!existing.exists) {
+      final user = AppUser(
+        uid: uid,
+        email: safeEmail,
+        displayName: safeDisplayName,
+        avatarType: 'icon',
+        avatarValue: 'person',
+        circleIds: const [],
+      );
+      await userRef.set(user.toMap());
+      return;
+    }
+
+    await userRef.set({
+      'email': safeEmail,
+      if (displayName.trim().isNotEmpty) 'displayName': safeDisplayName,
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateAvatarIcon(String iconName) async {
-    final uid = _authService.currentUser!.uid;
+    final uid = _authService.currentUser?.uid;
+    if (uid == null) throw StateError('No authenticated user.');
     await _db.collection('users').doc(uid).update({'avatarType': 'icon', 'avatarValue': iconName});
   }
 
   Future<void> updateAvatarImage(File file) async {
-    final uid = _authService.currentUser!.uid;
+    final uid = _authService.currentUser?.uid;
+    if (uid == null) throw StateError('No authenticated user.');
     final url = await _storageService.uploadAvatar(uid: uid, file: file);
     await _db.collection('users').doc(uid).update({'avatarType': 'image', 'avatarValue': url});
   }
@@ -45,7 +66,7 @@ class UserRepository {
       return const Stream.empty();
     }
     return _db.collection('users').doc(uid).snapshots().map((doc) {
-      if (!doc.exists) return null;
+      if (!doc.exists || doc.data() == null) return null;
       return AppUser.fromMap(doc.data()!);
     });
   }
